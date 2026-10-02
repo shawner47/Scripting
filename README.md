@@ -24,50 +24,47 @@ diagnosing network connections. Every script follows [STANDARDS.md](STANDARDS.md
 
 ## Standards review (2026-10-02)
 
-These findings come from reading the code. No script was run. The scripts
-have **not** been changed. Each fix below is planned for that script's next
-version.
+These findings come from reading each script against [STANDARDS.md](STANDARDS.md)
+(#1-#49). A script also checked bytes for the encoding rules (#1-#5),
+backtick continuations (#12), balanced braces (#15), dangerous constructs
+(#14) and quoting (#10, #11). No script was run. The scripts have **not**
+been changed. Each fix below is planned for that script's next version.
 
 ### Bugs
 
-1. **`Get-AzureGovernanceReport_v1.0.ps1` - `Write-Log ""` fails.**
-   `Write-Log` declares `[Parameter(Mandatory)][string]$Message`, and a
-   Mandatory string parameter rejects an empty string. The ~8 calls like
-   `Write-Log "" ; Write-Log "Phase 1..."` each raise a parameter-binding
-   error (the script carries on, but shows red errors). This is the
-   standard 13 rule; swap in the standard `Write-Log`.
-2. **`Get-AzureGovernanceReport_v1.0.ps1` - empty CSVs are not header-only.**
-   `"" | Export-Csv` exports the *string's* properties, so the file ends up
-   with a `"Length"` column and a `0` row instead of the dataset's headers.
-   To get a true header-only file, write the known column names directly
-   (or build an empty object with those properties, `ConvertTo-Csv`, and
-   keep only the first line).
-3. **`Move-Subnet-Delegation-Fix_v1.8.ps1` - `$matches` in
-   `Test-SufficientPermission`** overwrites the automatic `$Matches`
-   variable. It does no harm here, but rename it (for example
-   `$qualifying`).
+1. **`Get-AzureGovernanceReport_v1.0.ps1` - `Write-Log ""` fails (#20).**
+   `Write-Log` declares `[Parameter(Mandatory)][string]$Message`, so the ~8
+   `Write-Log ""` calls each raise a parameter-binding error. The script
+   carries on, but shows red errors.
+2. **`Get-AzureGovernanceReport_v1.0.ps1` - empty CSVs are not header-only (#47).**
+   `"" | Export-Csv` writes a `Length` column with a `0` row instead of the
+   dataset's column names.
+3. **`Move-Subnet-Delegation-Fix_v1.8.ps1` - `$matches` (#43)** in
+   `Test-SufficientPermission` overwrites the automatic `$Matches`. It does
+   no harm here, but rename it.
 4. **`Test-LdapPeriodicActivity_v1.0.ps1` - result can be misread.**
-   `LdapConnection` reconnects on its own by default. If the original TCP
-   session drops, the next `SendRequest` can open a *new* connection on a
-   different local port and report `[SEARCH OK]`, while the script is still
-   watching the old port. When a search succeeds, check that the local port
-   hasn't changed (or set `SessionOptions.AutoReconnect = $false`) so that
-   "real activity kept it alive" isn't confused with "it reconnected".
+   `LdapConnection` reconnects on its own by default, so `[SEARCH OK]` can be
+   reported on a *new* TCP connection while the script is still watching the
+   old port. When a search succeeds, check that the local port hasn't
+   changed (or set `SessionOptions.AutoReconnect = $false`).
 
-### Places where scripts don't follow the standards
+### Rule violations
 
-| Script | Gaps |
+| Script | Rules broken |
 |---|---|
-| `Get-AzureGovernanceReport_v1.0.ps1` | Calls `Connect-AzAccount` itself (§5); log named `Get-AzureGovernanceReport_<stamp>.log` instead of `<stamp>.<script>.log` (std 21); no level colors (std 19); no `$ScriptVersion`, version typed into log lines (std 8); `$Script:Config` hashtable instead of a CONFIGURATION variable block; log dir `C:\Logs\AzureGovernanceReport` and output `C:\Reports\...` instead of the standard locations; `$all +=` / `$mgRows +=` array growth; final `Write-Host` bypasses the log; header has no `WHAT THIS SCRIPT CHANGES` section; `[WARN]` appears twice in a WARN line. |
-| `Test-*` monitors (all four) | No `[CmdletBinding()]`; `C:\Temp` typed into the code instead of using `Join-Path`; no run log; the timestamp in the CSV uses the machine's regional date format (use `Get-Date -Format "yyyy-MM-dd HH:mm:ss"`). `Test-LdapPeriodicActivity` is ASCII/LF with no BOM, and its header calls the companion `Test-LdapBindConnection` while the file is named `Test-LDAPBindConnection` (decide on one casing). |
-| `Diagnose-StateFileLoad-v2.ps1` | Scratch file: no header, LF, no BOM, `-v2` naming. Keep it as a record of the bug, or delete it now that `Move-Subnet-Delegation-Fix` v1.8 fixes the bug and documents why. |
-| `Move-Subnet-Delegation-Fix_v1.8.ps1` | JSON state files are written with `Set-Content` and no `-Encoding`, so 5.1 writes them in ANSI (§7). |
+| `Get-AzureGovernanceReport_v1.0.ps1` | #12 backtick continuations (4, in Phase 1 `Select-Object`); #19 no level colors; #8 version typed into log lines, no `$ScriptVersion`; #21 log named `Get-AzureGovernanceReport_<stamp>.log`; #22 final `Write-Host` skips the log; #33 no `WHAT THIS SCRIPT CHANGES`; #35 `$Script:Config` hashtable; #36 calls `Connect-AzAccount`; #42 `+=` inside loops; #46 non-standard log/output folders. |
+| `Test-LdapPeriodicActivity_v1.0.ps1` | #1 LF line endings; #2 no BOM; #5 no trailing CRLF; #32 `Ldap` vs `LDAP` casing differs from its companion file; plus the monitor items below. |
+| `Test-*` monitors (all four) | #9 no `[CmdletBinding()]`; #27 `C:\Temp` typed into the code instead of using `Join-Path`; #49 CSV timestamp uses the regional date format, and there's no run log. |
+| `Move-Subnet-Delegation-Fix_v1.8.ps1` | #26 JSON state files written with `Set-Content` and no `-Encoding`. |
+| All scripts with `Write-Log` | Optional cleanup on each script's next version: drop the unused `-Color` override so the function matches the template (#19). |
+| `Diagnose-StateFileLoad-v2.ps1` | Scratch file (exempt), but would fail #1, #2, #5, #9, #32. Keep it as a record of the bug, or delete it. |
 
-### Already following the standards
+### Clean against #1-#15 and the core rules
 
 `Inventory-NSG-Associations_v1.3`, `Export-NSG-Rules_v1.0`,
-`New-BaselineNSG_v1.0` and `Move-Subnet-Delegation-Fix_v1.8` match the
-standards apart from the items above. Use them as templates.
+`New-BaselineNSG_v1.0` and `Move-Subnet-Delegation-Fix_v1.8` pass the
+encoding and syntax checks and follow the standards apart from the items
+above. Use them as templates.
 
 ## Organization options (to decide later)
 
