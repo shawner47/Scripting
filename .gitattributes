@@ -1,0 +1,5 @@
+# PowerShell scripts are stored byte-for-byte: CRLF line endings and UTF-8 BOM
+# are part of the standard (see STANDARDS.md) and must not be normalized by git.
+*.ps1  -text
+*.psm1 -text
+*.psd1 -text
