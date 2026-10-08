@@ -122,6 +122,7 @@ whole tenant, and per-subscription cmdlets for targeted work.
 | 28 | *Merged into #14* | Dangerous constructs. |
 | 29 | *Merged into #18* | Placeholder config values. |
 | 31 | **Read-only unless explicitly destructive** | Scripts that only read data should only use `Get-*` / `GET` API calls (switching context in your own session per #37 is allowed). Any write operation must be clearly documented and gated behind `-Apply` or `-Preview` (#23). |
+| 50 | **Loading a stored secret** | Store the secret as a SecureString with `Export-Clixml` (Windows DPAPI: only the same user on the same computer can read it). Load it in one helper that takes the file path as a parameter (default under the user's profile, never a hardcoded user name). The helper checks the file exists, checks the result is a `[securestring]`, and frees the BSTR with `ZeroFreeBSTR` in a `finally`. Keep the plain text only in the request headers, never in a long-lived variable. Never log it. Example: `Get-StoredApiKey` in Get-MerakiVLANs_v1.0. |
 
 ---
 
@@ -216,6 +217,7 @@ Write-Log "$scriptName finished"
 
 ## Revision history
 
+- **2026-10-08** - Added #50 (loading a stored secret).
 - **2026-10-02** - Merged the 2026-09-28 17:11:46 review standards (#1-#31)
   with conventions taken from the scripts in this repo (#32-#49). #25, #28
   and #29 were duplicates and are now merged into #12, #14 and #18. Rules

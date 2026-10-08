@@ -15,6 +15,7 @@ diagnosing network connections. Every script follows [STANDARDS.md](STANDARDS.md
 | `Get-AzureGovernanceReport_v1.0.ps1` | Azure | No | Tenant-wide subscriptions, MGs, RGs, resources, RBAC, policy via Resource Graph |
 | `New-BaselineNSG_v1.0.ps1` | Azure | With `-Apply` | Creates the baseline NSG (not attached anywhere) |
 | `Move-Subnet-Delegation-Fix_v1.8.ps1` | Azure | With `-Apply` | Multi-phase fix that clears a stuck delegation on subnet1/subnet2 |
+| `Get-MerakiVLANs_v1.0.ps1` | Meraki | No | Exports VLAN and single-LAN subnets for every MX network to CSV; key loaded from a DPAPI Clixml file |
 | `Test-IdleConnection_v1.0.ps1` | Monitor | No | Raw TCP socket left idle; logs when it drops |
 | `Test-ActiveConnection_v1.0.ps1` | Monitor | No | Raw TCP socket with a 1-byte keepalive |
 | `Test-LDAPBindConnection_v1.0.ps1` | Monitor | No | Real LDAP bind (Negotiate), then left idle |
