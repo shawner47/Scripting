@@ -27,12 +27,36 @@
 #   missing from the CSV. Check the run summary before relying on the file.
 #
 # PREREQUISITES:
-#   - PowerShell 5.1 or 7.
-#   - A Meraki API key stored as a SecureString with Export-Clixml, for
-#     example: Read-Host -AsSecureString | Export-Clixml <KeyPath>
-#     The file is protected by Windows DPAPI, so it can only be read by the
-#     same Windows user on the same computer that created it.
+#   - PowerShell 5.1 or 7 on Windows.
 #   - Read access to the organizations in Meraki.
+#   - A Meraki API key saved as an encrypted file (see FIRST-TIME SETUP).
+#
+# FIRST-TIME SETUP (once per Windows user, per computer):
+#   1. Get your API key: Meraki Dashboard > click your name (top right) >
+#      My profile > API access > Generate new API key. Copy it. Meraki
+#      shows the key only once. If you were handed a key by someone else,
+#      use that one instead.
+#   2. Open PowerShell as the SAME Windows user that will run the script
+#      (not as a different user, and not "Run as administrator" unless the
+#      script will also run that way). Then run these commands:
+#
+#        $keyDir = Join-Path $env:USERPROFILE ".meraki"
+#        New-Item -ItemType Directory -Path $keyDir -Force | Out-Null
+#        Read-Host "Paste Meraki API key" -AsSecureString |
+#            Export-Clixml -Path (Join-Path $keyDir "secureApiKey.xml")
+#
+#      Paste the key when prompted (nothing shows as you type) and press
+#      Enter. The key is never written to the screen or to a plain file.
+#   3. Run the script (see EXAMPLES). With no parameters it reads
+#      %USERPROFILE%\.meraki\secureApiKey.xml.
+#
+#   The file is encrypted with Windows DPAPI, so it opens only for the same
+#   Windows user on the same computer that created it. Copying it to another
+#   computer or user, or running the script as a different account (for
+#   example a scheduled task running as SYSTEM), will fail with a "could not
+#   read the API key file" error. Run those commands again as that account.
+#   To rotate the key, generate a new one in Meraki and repeat step 2.
+#   Never paste the key into the script, a chat or an e-mail.
 #
 # PARAMETERS:
 #   -KeyPath          Path of the Clixml file holding the API key.
@@ -54,6 +78,7 @@
 #
 # v1.0: Initial release. Replaces an untracked script that read the key from
 #       a hardcoded user path. Changes from that script, and why:
+#       - Setup steps for creating the key file are in FIRST-TIME SETUP.
 #       - Key: Get-StoredApiKey checks the file exists, checks it holds a
 #         SecureString, and frees the BSTR in a finally block (STANDARDS
 #         #50). The old script never freed it. The key now lives only in
