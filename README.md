@@ -15,7 +15,7 @@ diagnosing network connections. Every script follows [STANDARDS.md](STANDARDS.md
 | `Get-AzureGovernanceReport_v1.0.ps1` | Azure | No | Tenant-wide subscriptions, MGs, RGs, resources, RBAC, policy via Resource Graph |
 | `New-BaselineNSG_v1.0.ps1` | Azure | With `-Apply` | Creates the baseline NSG (not attached anywhere) |
 | `Move-Subnet-Delegation-Fix_v1.8.ps1` | Azure | With `-Apply` | Multi-phase fix that clears a stuck delegation on subnet1/subnet2 |
-| `Add-MerakiThreatIPs_v4.0.ps1` | Meraki | Yes (omit with `-Preview`) | Adds threat IPs as Meraki policy objects and spreads them over numbered policy object groups (Meraki allows 150 objects per group) |
+| `Add-MerakiThreatIPs_v4.1.ps1` | Meraki | Yes (omit with `-Preview`) | Adds threat IPs as Meraki policy objects and spreads them over numbered policy object groups (Meraki allows 150 objects per group) |
 | `Initialize-MerakiThreatRule_v4.1.ps1` | Meraki | Yes (omit with `-Preview` / `-AuditOnly`) | Puts the threat deny rule, listing every threat group, on every MX network and template |
 | `Test-IdleConnection_v1.0.ps1` | Monitor | No | Raw TCP socket left idle; logs when it drops |
 | `Test-ActiveConnection_v1.0.ps1` | Monitor | No | Raw TCP socket with a 1-byte keepalive |
