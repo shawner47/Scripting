@@ -40,7 +40,7 @@ rules by topic, so the numbers inside a section are not always in order.*
 | 8 | **Stale version references** | Any script filename references in EXAMPLES, DESCRIPTION, or log line calls must match the current version. `v1.0.ps1` in examples when the file is v1.1 fails. Set the version once, as `$ScriptVersion` in CONFIGURATION, and get the script name at runtime (`$scriptName = $MyInvocation.MyCommand.Name -replace '\.ps1$', ''`). Log lines use those two variables and never type the name or version in. |
 | 9 | **Standard header block** | Scripts use the `# ============================================================` wrapper format. Comment-based help (`<# .SYNOPSIS #>`) is acceptable only when `[CmdletBinding()]` is used and `Get-Help` is intentional. |
 | 33 | **Header sections** | In this order, wherever they apply: summary; `WHAT THIS SCRIPT COLLECTS:` (read-only scripts); `WHAT THIS SCRIPT CHANGES:` (**always**, with `Azure:` / `Your PS session:` / `Your computer:` sub-items, saying "Nothing" where that is true); `HANDLE THE OUTPUT AS SENSITIVE:` (when output contains IPs, rules or identities); `WHAT THE RESULTS DO NOT SHOW:`; `PREREQUISITES:` (modules, sign-in, minimum role); `RECOMMENDED EXECUTION ORDER:` (multi-phase scripts); `PARAMETERS:` (each one with its default); `OUTPUT:` (every file and its name pattern); `EXAMPLES:`; version history. Diagnostic monitors also include `PURPOSE:` with a table of outcomes and what each one means, and `INTERPRETING RESULTS:`. |
-| 35 | **CONFIGURATION block** | Fixed values (`$LogDir`, `$ScriptVersion`, address lists, and so on) go in a single block between `# ====` banners, right after `param()` and the required-parameter check. Each non-obvious value has a comment saying where it came from. |
+| 35 | **CONFIGURATION block** | Fixed values (`$LogDir`, `$ScriptVersion`, address lists, and so on) go in a single block between `# ====` banners, right after `param()`. Each non-obvious value has a comment saying where it came from. |
 
 ---
 
@@ -52,7 +52,7 @@ rules by topic, so the numbers inside a section are not always in order.*
 | 11 | **`$variable:` scope ambiguity** | A variable name immediately followed by a colon in a string (`"$TargetHost:$Port"`) is parsed as a scoped variable reference. Fix with `"${TargetHost}:$Port"`. |
 | 12 | **No backtick line continuations** | Replace with PowerShell splatting (`$params = @{...}; Cmdlet @params`). Inline backtick escaping (e.g. `` `n `` for newline inside a string) is acceptable. *(Also covers #25.)* |
 | 13 | **`[Parameter(Mandatory)]` on `[string]` params** | Mandatory validation rejects empty strings at runtime, breaking any caller that passes `""`. Use `[string]$Param = ""` instead, or omit Mandatory entirely. |
-| 34 | **Required-parameter check** | Required parameters default to `""` (see #13) and are checked right after `param()`. Collect every missing name and throw once: `throw "Missing required parameter(s): -A, -B"`. Check parameters that take one of a fixed set of values against an explicit list (`$validPhases -notcontains $Phase`). |
+| 34 | **Required-parameter check** | Required parameters default to `""` (see #13) and are checked once logging has started (#22), so the failure is logged. Collect every missing name, log it at ERROR, then throw once: `Missing required parameter(s): -A, -B`. Check parameters that take one of a fixed set of values against an explicit list (`$validPhases -notcontains $Phase`). |
 | 14 | **No dangerous constructs** | `Invoke-Expression`, `iex`, `cmd /c`, and `Start-Process` with user input are prohibited. *(Also covers #28.)* |
 | 15 | **Balanced braces** | Open `{` count must equal close `}` count. |
 | 41 | **Loading JSON arrays (PS 5.1)** | Use three separate statements: `$raw = Get-Content -Path $f -Raw`, then `$parsed = $raw \| ConvertFrom-Json`, then `$items = @($parsed)`. On 5.1, `ConvertFrom-Json` returns a whole JSON array as a single pipeline object. `@(... \| ConvertFrom-Json)` therefore makes an array of one item, and reading a property on it gathers the value from every entry into one space-joined string. Found in Move-Subnet-Delegation-Fix v1.7/v1.8. |
@@ -69,9 +69,9 @@ rules by topic, so the numbers inside a section are not always in order.*
 | 19 | **`Write-Log` with color by level** | ERROR=Red, WARN=Yellow, SUCCESS=Green, INFO=White. All scripts with a `Write-Log` function must apply this. Use the template's `Write-Log` exactly as written (section 8). Log lines only use the level colors. |
 | 20 | **No `[Parameter(Mandatory)]` on `Write-Log $Message`** | `Write-Log ""` for blank line spacing breaks at runtime. Use `[string]$Message = ""`. |
 | 21 | **Timestamped output filenames** | CSV and log files use `yyyy.MM.dd.HHmmss` prefix. Fixed filenames that get overwritten on re-run are a defect. Each run takes **one** timestamp (`$stamp`) and uses it for the log and every output file. The log file is `Join-Path $LogDir "$stamp.$scriptName.log"`. *Exception:* state files that one run writes for a later run to read (e.g. `subnet-migration-state.json`) have fixed names on purpose. |
-| 22 | **Log file written in addition to console** | Meaningful runs produce a log file, not console-only output. Tables also go to the log, through `Write-LogTable` (`Format-Table` piped to `Out-String -Width 250`, then one `Write-Log` per line). Never write a bare `Format-Table` or `Write-Host` that skips the log. |
+| 22 | **Log file written in addition to console** | Every kept script writes a log file, for troubleshooting and auditing. Console-only output is a defect. (A diagnostic monitor whose CSV data log is its main output meets this, see #49.) **Logging starts before anything that can fail:** create the log folder, define `Write-Log` and log the `started` line first, then do the required-parameter check (#34), validation and any other work, so a failed check is in the log too. Tables also go to the log, through `Write-LogTable` (`Format-Table` piped to `Out-String -Width 250`, then one `Write-Log` per line). Never write a bare `Format-Table` or `Write-Host` that skips the log. |
 | 45 | **Run framing** | The first line is `"$scriptName started (version $ScriptVersion)"`, followed by the mode, targets, output folder and log path. When the run writes files, it lists them under `Files written:` (SUCCESS). The last line is `"$scriptName finished"`. A script that scans several scopes logs a count per scope so you can check nothing was skipped. |
-| 46 | **Folders and default locations** | Create the log and output folders before the first log line. Defaults: logs go to `C:\Logs\Azure` and state files to `C:\Logs\Azure\State`. Report output goes to `C:\Temp`, and the `-OutputDirectory` parameter overrides it. |
+| 46 | **Folders and default locations** | Create the log and output folders before the first log line. Defaults: logs go to `C:\Logs` for any script that does not specify another folder. A script may name its own subfolder, and existing scripts that already use `C:\Logs\Azure` keep it. State files go to `C:\Logs\Azure\State`. Report output goes to `C:\Temp`, and the `-OutputDirectory` parameter overrides it. |
 | 26 | **`-Encoding UTF8` on file writes** | Required in PowerShell 5.1 on `Export-Csv`, `Out-File` and `Set-Content` (JSON state files included). Without it, 5.1 uses Windows-1252 or UTF-16. |
 | 47 | **Empty results** | When nothing matches, stop cleanly: log a WARN, write no files, and `exit 0` (see #24). If an empty file is still wanted, write the column names yourself. `"" \| Export-Csv` writes a `Length` column, not the dataset's headers. CSV columns are PascalCase and keep the same names across versions. Values that are lists are sorted before joining, so the same data always gives the same text. |
 | 49 | **Diagnostic monitor profile** | The main output is the CSV data log `$stamp.<test-name>-log.csv`, which `-LogPath` can override. CSV timestamps use `Get-Date -Format "yyyy-MM-dd HH:mm:ss"`, not the machine's regional format. Console colors may show connection state (Green = healthy, Red = lost, Yellow = notice). New monitors also write a `Write-Log` run log (#22). |
@@ -161,14 +161,10 @@ param(
     [switch]$Apply              # preview by default; never -WhatIf (#23)
 )
 
-$missing = @()
-if ($TargetName -eq "") { $missing += "-TargetName" }
-if ($missing.Count -gt 0) { throw ("Missing required parameter(s): {0}" -f ($missing -join ", ")) }
-
 # ============================================================
 # CONFIGURATION -- placeholders only for secrets (#18)
 # ============================================================
-$LogDir        = "C:\Logs\Azure"
+$LogDir        = "C:\Logs"
 $ScriptVersion = "1.0"
 # ============================================================
 
@@ -203,9 +199,20 @@ function Write-LogTable {
 }
 
 
+# Logging starts first (#22), then the required-parameter check (#34),
+# so a missing parameter is in the log too.
 Write-Log "$scriptName started (version $ScriptVersion)"
-Write-Log ("Mode: {0}" -f $(if ($Apply) { "APPLY - changes will be made" } else { "PREVIEW - no changes will be made" }))
 Write-Log "Log file: $logFile"
+
+$missing = @()
+if ($TargetName -eq "") { $missing += "-TargetName" }
+if ($missing.Count -gt 0) {
+    $msg = "Missing required parameter(s): {0}" -f ($missing -join ", ")
+    Write-Log $msg -Level ERROR
+    throw $msg
+}
+
+Write-Log ("Mode: {0}" -f $(if ($Apply) { "APPLY - changes will be made" } else { "PREVIEW - no changes will be made" }))
 
 # Azure: session check, context save/switch/verify, try/finally restore (#36, #37)
 # Build the plan once; show it; exit 0 if not -Apply (#23)
@@ -251,6 +258,11 @@ finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
 
 ## Revision history
 
+- **2026-10-23 (later)** - #22 now covers every kept script and requires
+  logging to start before any check that can fail. #34 and the template
+  were reordered to match (log setup, then the required-parameter check),
+  and #35 no longer mentions the check. #46: the default log folder is
+  `C:\Logs`; scripts already using `C:\Logs\Azure` keep it.
 - **2026-10-23** - Added #50 (secrets stored as DPAPI-encrypted files, no
   plain-text key parameters) and #51 (HTTPS and TLS 1.2 only), plus the
   section 11 helper. Based on the SecureString handling in
