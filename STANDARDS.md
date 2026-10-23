@@ -122,6 +122,8 @@ whole tenant, and per-subscription cmdlets for targeted work.
 | 28 | *Merged into #14* | Dangerous constructs. |
 | 29 | *Merged into #18* | Placeholder config values. |
 | 31 | **Read-only unless explicitly destructive** | Scripts that only read data should only use `Get-*` / `GET` API calls (switching context in your own session per #37 is allowed). Any write operation must be clearly documented and gated behind `-Apply` or `-Preview` (#23). |
+| 50 | **Secrets are stored encrypted and never passed as plain text** | An API key is stored as a DPAPI-encrypted file made with `ConvertFrom-SecureString` (or `Export-Clixml`) and read with `ConvertTo-SecureString` (or `Import-Clixml`). Only the same Windows user on the same machine can decrypt it. Resolve the key in this order: the encrypted file, then a masked `Read-Host -AsSecureString` prompt that offers to save the file. **Never add a plain-text `-ApiKey` / `-Password` parameter**: it lands in PSReadLine history, the process list and transcripts. Keep the key as a `SecureString` for as long as possible. Convert it to plain text only inside the request wrapper (it must be a string for the Meraki header), and free the BSTR in a `finally` with `[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)`. Never log the key or any part of it. The key file path is a parameter with a per-user default (`Join-Path $env:USERPROFILE '.meraki_api_key'`), never a named user's profile path. Fail with a clear message if the file is missing or can't be decrypted, and don't prompt when the session is non-interactive. See section 11 for the helper. |
+| 51 | **Encrypted transport only** | API base URLs are `https://`. Never accept `http://`, and never disable certificate checks. Windows PowerShell 5.1 may not negotiate TLS 1.2 by default, so set `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12` once at the top of any script that calls a web API. The DPAPI file in #50 protects the key at rest only. HTTPS protects it in transit. Neither protects it from malware running as the same user. |
 
 ---
 
@@ -214,8 +216,45 @@ Write-Log "$scriptName finished"
 
 ---
 
+## 11. Secret Helper (Standard 50)
+
+```powershell
+function Get-StoredApiKey {
+    # Returns a SecureString. Convert to plain text only inside Invoke-MerakiRequest (#50).
+    param([string]$KeyFile)
+    if (Test-Path -Path $KeyFile) {
+        try   { return (Get-Content -Path $KeyFile -ErrorAction Stop | ConvertTo-SecureString) }
+        catch { Write-Log "Could not decrypt '$KeyFile' (made by another user or machine?): $_" -Level WARN }
+    }
+    if (-not [Environment]::UserInteractive) {
+        Write-Log "No usable key file at '$KeyFile' and the session is not interactive." -Level ERROR
+        throw "No API key available. Create the key file first."
+    }
+    $secure = Read-Host -Prompt "API key" -AsSecureString
+    if ($secure.Length -eq 0) { throw "No API key entered." }
+    if ((Read-Host "Save encrypted key to '$KeyFile'? (y/N)") -eq 'y') {
+        $dir = Split-Path -Path $KeyFile -Parent
+        if (-not (Test-Path -Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        $secure | ConvertFrom-SecureString | Set-Content -Path $KeyFile -Encoding UTF8
+        Write-Log "Key saved to $KeyFile (DPAPI: this user and machine only)." -Level SUCCESS
+    }
+    return $secure
+}
+
+# Inside Invoke-MerakiRequest, build the header and free the BSTR straight after:
+$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($script:ApiKeySecure)
+try     { $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
+finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+```
+
+---
+
 ## Revision history
 
+- **2026-10-23** - Added #50 (secrets stored as DPAPI-encrypted files, no
+  plain-text key parameters) and #51 (HTTPS and TLS 1.2 only), plus the
+  section 11 helper. Based on the SecureString handling in
+  Set-MerakiNetworkACL v2.7, minus its plain-text `-ApiKey` parameter.
 - **2026-10-02** - Merged the 2026-09-28 17:11:46 review standards (#1-#31)
   with conventions taken from the scripts in this repo (#32-#49). #25, #28
   and #29 were duplicates and are now merged into #12, #14 and #18. Rules
