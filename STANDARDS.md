@@ -11,6 +11,7 @@ rules by topic, so the numbers inside a section are not always in order.*
 - **Interactive diagnostic monitors** (`Test-*Connection`, `Test-Ldap*`) -
   every rule, with the reduced logging profile in #49.
 - **Meraki scripts** - every rule, plus section 7.
+- **Any script that calls a web API** (Meraki or not) - #50-#55.
 - **Throwaway debug snippets** - exempt until kept. A kept snippet must meet
   every rule.
 
@@ -104,13 +105,16 @@ whole tenant, and per-subscription cmdlets for targeted work.
 
 ---
 
-## 7. API and External Calls (Meraki Scripts)
+## 7. API and External Calls (Meraki Scripts; #52-#54 apply to every API script)
 
 | # | Check | Detail |
 |---|-------|--------|
 | 16 | **`Invoke-RestMethod` only inside the wrapper** | All API calls must go through `Invoke-MerakiRequest`, never directly. Zero direct calls outside the wrapper. |
 | 17 | **`Invoke-MerakiRequest` retry wrapper** | Must handle HTTP 429, 5xx transient errors, and connection-level failures (null status code) with exponential backoff. |
 | 30 | **Security helper functions present where applicable** | `Test-ValidSerial`, `Test-ValidSwitchConfig`, `ConvertTo-NormalizedMac` in the migration script family. |
+| 52 | **Show the API's own error text, not just PowerShell's** | When an API call fails, the message PowerShell gives ("(400) Bad Request") is not the reason. The reason is in the response body. The request wrapper must read it and put it in the thrown message and the log: `ErrorDetails.Message` on PowerShell 7, and on Windows PowerShell 5.1 the response stream (`$_.Exception.Response.GetResponseStream()` read with a `StreamReader`), because 5.1 leaves `ErrorDetails` empty. When a write fails, also log the JSON that was sent (never the headers or the key) so the rejected item can be found. A failed write must say whether anything was changed. Reference: `Invoke-MerakiRequest` and `Invoke-AclPut` in Set-MerakiNetworkACL v2.12+. Found when a 400 on v2.11 gave no reason, and v2.12 showed `Port must be in the range of 1-65535, or 'any'`. |
+| 53 | **Check payload limits against the API, not assumptions** | Don't assume a field takes lists, ranges, wildcards or longer text than the docs say. Check the API reference for each field's allowed values, and treat the API's own error text (#52) as the final word. Take one value per field unless the docs show a list. Validate against those limits before anything is sent, with a message that names the CSV row or input. Found in Set-MerakiNetworkACL v2.2-v2.12: `80,443` in one rule was rejected, because the switch ACL takes one port per rule. |
+| 54 | **Don't add your own copy of what the platform already supplies** | Before adding a default, catch-all or built-in object (a default rule, a default route, a built-in role), read the live state and see what the platform already keeps. Don't send a duplicate. Verification and restore must tolerate platform-added items: ignore the expected extra one when comparing, and leave it out of what a restore sends. Warn if the platform's own default is not what you expect. Found in Set-MerakiNetworkACL v2.15: Meraki always keeps a last `Default rule` (allow any), so our own default-allow rule showed up as 12 rules where 11 were sent. |
 
 ---
 
@@ -132,6 +136,7 @@ whole tenant, and per-subscription cmdlets for targeted work.
 | # | Check | Detail |
 |---|-------|--------|
 | 48 | **Test the way it runs** | Test fixes by running the script as a **file** on the PowerShell version it targets (5.1 Desktop vs 7), not by typing commands into the console. Some bugs only show up one way. Reproduce a bug with a standalone diagnostic before calling it fixed, and check the fix the same way. Run a preview and read it before every `-Apply`. |
+| 55 | **JSON arrays are tested on Windows PowerShell 5.1, with 0, 1 and many items** | A test on PowerShell 7 alone does not count for anything that reads a JSON array (see #41). 7 returns the items, and 5.1 returns the whole array as one object, so the bug only shows on 5.1. Run the read/write round trip on 5.1 with an empty array, a one-item array and a many-item array, and check the count after reading. Never pipe `ConvertFrom-Json` straight into `@()`. Parse in its own statement, then enumerate (`ConvertFrom-JsonArray` in Set-MerakiNetworkACL v2.14+). Found in v2.9-v2.13: a backup check that passed every 7 test stopped on a real 12-rule ACL. A restore using the same line would have read a multi-rule backup as one broken rule. |
 
 ---
 
@@ -258,6 +263,11 @@ finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
 
 ## Revision history
 
+- **2026-10-23 (API lessons)** - Added #52 (show the API's own error text),
+  #53 (check payload limits against the API), #54 (don't duplicate what the
+  platform supplies) and #55 (test JSON arrays on Windows PowerShell 5.1
+  with 0, 1 and many items). All four came from Set-MerakiNetworkACL
+  v2.11-v2.15. Section 7 now applies to every script that calls an API.
 - **2026-10-23 (rule colors)** - #19 allows rule listings to be colored by
   policy (ALLOW Green, DENY Red) through a helper that still logs the line.
 - **2026-10-23 (later)** - #22 now covers every kept script and requires
