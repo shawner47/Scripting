@@ -66,7 +66,7 @@ rules by topic, so the numbers inside a section are not always in order.*
 
 | # | Check | Detail |
 |---|-------|--------|
-| 19 | **`Write-Log` with color by level** | ERROR=Red, WARN=Yellow, SUCCESS=Green, INFO=White. All scripts with a `Write-Log` function must apply this. Use the template's `Write-Log` exactly as written (section 8). Log lines only use the level colors. |
+| 19 | **`Write-Log` with color by level** | ERROR=Red, WARN=Yellow, SUCCESS=Green, INFO=White. All scripts with a `Write-Log` function must apply this. Use the template's `Write-Log` exactly as written (section 8). Log lines only use the level colors. *Exception:* a listing of allow/deny rules may color each line by policy (ALLOW Green, DENY Red) through a helper that also writes the line to the log (see `Write-LogRule` in Set-MerakiNetworkACL v2.11). |
 | 20 | **No `[Parameter(Mandatory)]` on `Write-Log $Message`** | `Write-Log ""` for blank line spacing breaks at runtime. Use `[string]$Message = ""`. |
 | 21 | **Timestamped output filenames** | CSV and log files use `yyyy.MM.dd.HHmmss` prefix. Fixed filenames that get overwritten on re-run are a defect. Each run takes **one** timestamp (`$stamp`) and uses it for the log and every output file. The log file is `Join-Path $LogDir "$stamp.$scriptName.log"`. *Exception:* state files that one run writes for a later run to read (e.g. `subnet-migration-state.json`) have fixed names on purpose. |
 | 22 | **Log file written in addition to console** | Every kept script writes a log file, for troubleshooting and auditing. Console-only output is a defect. (A diagnostic monitor whose CSV data log is its main output meets this, see #49.) **Logging starts before anything that can fail:** create the log folder, define `Write-Log` and log the `started` line first, then do the required-parameter check (#34), validation and any other work, so a failed check is in the log too. Tables also go to the log, through `Write-LogTable` (`Format-Table` piped to `Out-String -Width 250`, then one `Write-Log` per line). Never write a bare `Format-Table` or `Write-Host` that skips the log. |
@@ -258,6 +258,8 @@ finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
 
 ## Revision history
 
+- **2026-10-23 (rule colors)** - #19 allows rule listings to be colored by
+  policy (ALLOW Green, DENY Red) through a helper that still logs the line.
 - **2026-10-23 (later)** - #22 now covers every kept script and requires
   logging to start before any check that can fail. #34 and the template
   were reordered to match (log setup, then the required-parameter check),
