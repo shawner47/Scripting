@@ -314,10 +314,11 @@ function Invoke-MerakiRequest {
             if ($null -ne $respProp -and $null -ne $respProp.Value) {
                 $status = [int]$respProp.Value.StatusCode
             }
+            $statusText = if ($null -eq $status) { 'no response' } else { $status }
             $transient = ($null -eq $status) -or ($status -eq 429) -or ($status -ge 500)
             if ($transient -and $attempt -le $maxRetries) {
                 $wait = [int][Math]::Pow(2, $attempt)
-                Write-Log "$Method request failed (status: $status). Retry $attempt of $maxRetries in $wait second(s)." -Level WARN
+                Write-Log "$Method request failed (status: $statusText). Retry $attempt of $maxRetries in $wait second(s)." -Level WARN
                 Start-Sleep -Seconds $wait
                 continue
             }
@@ -325,7 +326,7 @@ function Invoke-MerakiRequest {
             if ($null -ne $_.ErrorDetails -and -not [string]::IsNullOrWhiteSpace($_.ErrorDetails.Message)) {
                 $detail = "{0} -- {1}" -f $detail, $_.ErrorDetails.Message
             }
-            throw "Meraki API $Method $Uri failed (status: $status): $detail"
+            throw "Meraki API $Method $Uri failed (status: $statusText): $detail"
         }
     }
 }
