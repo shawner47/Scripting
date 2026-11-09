@@ -57,7 +57,7 @@ rules by topic, so the numbers inside a section are not always in order.*
 | 14 | **No dangerous constructs** | `Invoke-Expression`, `iex`, `cmd /c`, and `Start-Process` with user input are prohibited. *(Also covers #28.)* |
 | 15 | **Balanced braces** | Open `{` count must equal close `}` count. |
 | 41 | **Loading JSON arrays (PS 5.1)** | Use three separate statements: `$raw = Get-Content -Path $f -Raw`, then `$parsed = $raw \| ConvertFrom-Json`, then `$items = @($parsed)`. On 5.1, `ConvertFrom-Json` returns a whole JSON array as a single pipeline object. `@(... \| ConvertFrom-Json)` therefore makes an array of one item, and reading a property on it gathers the value from every entry into one space-joined string. Found in Move-Subnet-Delegation-Fix v1.7/v1.8. |
-| 42 | **Collections** | Inside loops, use `New-Object System.Collections.Generic.List[object]` and `.Add()`. Don't use `$array +=`, which copies the whole array on every add. Wrap any result whose `.Count` you read in `@()`. |
+| 42 | **Collections** | Inside loops, use `[System.Collections.Generic.List[object]]::new()` (or `New-Object System.Collections.Generic.List[object]`) and `.Add()`. Read a list's `.Count` directly, and don't wrap a `New-Object` list in `@()`: on PowerShell 7.6 that fails with "Argument types do not match" (found testing Get-ADDelegationAudit v1.0). Don't use `$array +=`, which copies the whole array on every add. Wrap any result whose `.Count` you read in `@()`. |
 | 43 | **No assigning to automatic variables** | `$matches`, `$input`, `$args`, `$error`, `$host`, `$event`, `$_`/`$PSItem`. Variable names aren't case-sensitive, so `$matches` is the same variable as `$Matches`. |
 | 44 | **Error handling discipline** | Use `-ErrorAction Stop` inside `try`. Use `-ErrorAction SilentlyContinue` only when "not found" is an expected answer that is checked on the next line. Check each level is non-null before reading below it (`$nic.NetworkSecurityGroup -and $nic.NetworkSecurityGroup.Id`). Enumerating a hashtable with `GetEnumerator()` gives `.Key`/`.Value`, not `.Name`. |
 
@@ -263,6 +263,8 @@ finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
 
 ## Revision history
 
+- **2026-11-09** - #42: prefer `[List[object]]::new()`; a `New-Object` list
+  wrapped in `@()` fails on PowerShell 7.6.
 - **2026-10-23 (API lessons)** - Added #52 (show the API's own error text),
   #53 (check payload limits against the API), #54 (don't duplicate what the
   platform supplies) and #55 (test JSON arrays on Windows PowerShell 5.1
